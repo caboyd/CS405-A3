@@ -12,7 +12,7 @@ Mat4::Mat4()
 
 Mat4::Mat4(float value)
 {
-	for (float & i : m)
+	for (float& i : m)
 		i = value;
 }
 
@@ -164,6 +164,13 @@ Mat4 Mat4::getTransposed() const
 	return m;
 }
 
+Mat4 Mat4::getInverted() const
+{
+	Mat4 mat(*this);
+	mat.inverse();
+	return mat;
+}
+
 bool Mat4::isIdentity() const
 {
 	for (int i = 0; i < 4; i++)
@@ -223,6 +230,15 @@ Mat4 Mat4::fromScaling(const Vector3& v)
 	            0.f, v.y, 0.f, 0.f,
 	            0.f, 0.f, v.z, 0.f,
 	            0.f, 0.f, 0.f, 1.f);
+}
+
+Mat4 Mat4::fromOrthoNormalVectors(const Vector3& u_right, const Vector3& v_up, const Vector3& n_forward)
+{
+	// @formatter:off
+	return Mat4(u_right.x,   u_right.y,   u_right.z, 0.f,
+				   v_up.x,      v_up.y,      v_up.z, 0.f,
+              n_forward.x, n_forward.y, n_forward.z, 0.f,
+					  0.f,		   0.f,			0.f, 1.f);
 }
 
 Mat4 Mat4::fromXRotation(float rad)

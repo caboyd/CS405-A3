@@ -22,6 +22,7 @@ public:
 	static Mat4 fromTranslation(const Vector3& v);
 	static Mat4 fromScaling(const Vector3& v);
 
+	static Mat4 fromOrthoNormalVectors(const Vector3& u_right, const Vector3& v_up, const Vector3& n_forward);
 	static Mat4 fromXRotation(float rad);
 	static Mat4 fromYRotation(float rad);
 	static Mat4 fromZRotation(float rad);
@@ -45,6 +46,7 @@ public:
 
 	//Getters
 	Mat4 getTransposed() const;
+	Mat4 getInverted() const;
 	bool isIdentity() const;
 	bool isZero() const;
 
