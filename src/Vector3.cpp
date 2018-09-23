@@ -8,6 +8,10 @@ Vector3::Vector3(): x(0), y(0), z(0)
 {
 }
 
+Vector3::Vector3(float value):x(value),y(value),z(value)
+{
+}
+
 Vector3::Vector3(float x, float y, float z): x(x), y(y), z(z)
 {
 }
@@ -57,7 +61,7 @@ bool Vector3::isZero() const
 
 float Vector3::length() const
 {
-	return sqrt(x * x + y * y + z * z);
+	return sqrtf(x * x + y * y + z * z);
 }
 
 float Vector3::getSquaredLength() const

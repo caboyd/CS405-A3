@@ -1,5 +1,6 @@
 #pragma once
-#include <iostream>
+#include <ostream>
+
 
 class Vector3
 {
@@ -10,6 +11,7 @@ public:
 
 	//Constructors
 	Vector3();
+	explicit Vector3(float value);
 	Vector3(float x, float y, float z);
 
 	//Copy Constructor
