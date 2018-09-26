@@ -301,6 +301,23 @@ Mat4 Mat4::operator/(const Mat4& rhs) const
 	return mat;
 }
 
+Vector3 Mat4::operator*(const Vector3& v) const
+{
+	//TODO: Vector4 Support
+	Vector3 vec;
+	float data[4], old_data[4];
+	old_data[0] = v.x; old_data[1] = v.y; old_data[2] = v.z; old_data[3] = 1.f;
+	for (int i = 0; i < 4; i++)
+	{
+		data[i] = 0;
+		for (int j = 0; j < 4; j++)
+		{
+			data[i] += old_data[j] * m[i*4 + j];
+		}
+	}
+	return Vector3(data[0],data[1],data[2]);
+}
+
 Mat4 Mat4::operator*(float scalar) const
 {
 	Mat4 mat;
@@ -371,19 +388,20 @@ Mat4& Mat4::operator/=(const Mat4& rhs)
 
 std::ostream& operator<<(std::ostream& os, const Mat4& m)
 {
-
+	os  << std::fixed  << std::setprecision(6) ;
 	for(int i = 0; i < 4; i++)
 	{
 		if( i == 0)os << "["; else os << " ";
 		for(int j = 0; j < 4; j++)
 		{
-			os << std::setw(9) << std::fixed;
+			os<< std::setw(9);
 			os << m[i*4 + j];
 			if(i != 3 || j !=3) os << ", ";
 		}
 		if (i == 3) os << "]";
 		os << std::endl;
 	}
+	os.unsetf(std::ios_base::fixed);
 	return os;
 }
 

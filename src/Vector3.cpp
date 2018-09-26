@@ -217,6 +217,6 @@ std::ostream& operator<<(std::ostream& os, const Vector3& v)
 	if (!os.good())
 		return os;
 
-	os << "X:" << v.x << ", Y:" << v.y << ", Z:" << v.z;
+	os << "(" << v.x << ", " << v.y << ", " << v.z << ")";
 	return os;
 }

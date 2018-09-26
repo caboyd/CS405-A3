@@ -56,6 +56,8 @@ public:
 	Mat4 operator*(const Mat4& rhs) const;
 	Mat4 operator/(const Mat4& rhs) const;
 
+	Vector3 operator*(const Vector3& v) const;
+
 	Mat4 operator*(float scalar) const;
 	Mat4 operator/(float scalar) const;
 	Mat4& operator*=(float scalar);
