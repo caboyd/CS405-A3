@@ -216,7 +216,8 @@ std::ostream& operator<<(std::ostream& os, const Vector3& v)
 {
 	if (!os.good())
 		return os;
-
+	os  << std::fixed;
 	os << "(" << v.x << ", " << v.y << ", " << v.z << ")";
+	os.unsetf(std::ios_base::fixed);
 	return os;
 }

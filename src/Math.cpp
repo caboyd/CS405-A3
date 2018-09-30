@@ -27,9 +27,11 @@ void orthoNormalVectors(const Vector3& v1, const Vector3& v2, Vector3& u, Vector
 	v = y_up;
 }
 
-void coordinateSystemTransformationMatricesFromPositionNormalUp(const Vector3& VRP, const Vector3& VPN, const Vector3& VUP,
-                                               Mat4& transformation_matrix,
-                                               Mat4& inverse_transformation_matrix)
+void coordinateSystemTransformationMatricesFromPositionNormalUp(
+	const Vector3& VRP, const Vector3& VPN,
+	const Vector3& VUP,
+	Mat4& transformation_matrix,
+	Mat4& inverse_transformation_matrix)
 {
 	Vector3 u, v, n;
 	orthoNormalVectors(VPN, VUP, u, v, n);
@@ -46,7 +48,7 @@ void coordinateSystemTransformationMatricesFromPositionNormalUp(const Vector3& V
 
 	//4x4 Matrix Multiplication
 	transformation_matrix = R * T;
-	
+
 	Mat4 R_inv = Mat4(u.x, v.x, n.x, 0.f,
 	                  u.y, v.y, n.y, 0.f,
 	                  u.z, v.z, n.z, 0.f,
