@@ -1,4 +1,5 @@
 #include "Vector3.h"
+#include <cassert>
 
 
 const Vector3 Vector3::ZERO(0.0, 0.0, 0.0);
@@ -86,6 +87,19 @@ float Vector3::distance(const Vector3& v) const
 float Vector3::distanceSquared(const Vector3& v) const
 {
 	return (*this - v).getSquaredLength();
+}
+
+float Vector3::getLargestComponentIndex() const
+{
+	float a_x = abs(x);
+	float a_y = abs(y);
+	float a_z = abs(z);
+
+	if(a_x >= a_y && a_x >= a_z) return 0;
+	if(a_y >= a_x && a_y >= a_z) return 1;
+	if(a_z >= a_y && a_z >= a_x) return 2;
+	assert(false);
+	return 0;
 }
 
 Vector3 Vector3::operator-() const
@@ -195,6 +209,16 @@ Vector3& Vector3::operator/=(float f)
 	this->y /= f;
 	this->z /= f;
 	return *this;
+}
+
+float Vector3::operator[](int i) const
+{
+	return data[i];
+}
+
+float& Vector3::operator[](int i)
+{
+	return data[i];
 }
 
 Vector3 Vector3::cross(const Vector3& v) const

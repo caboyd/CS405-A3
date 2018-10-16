@@ -5,133 +5,137 @@
 #include <vector>
 
 #include "Math.h"
+#include "tgaimage.h"
+
+#include "Camera.h"
+#include "Sphere.h"
+#include "Polygon.h"
 using std::cout;
 using std::endl;
 
-/**
- *	Creates transformation and inverse transformation matrices and prints them
- *	Uses the given test points and uses the transformation matrix to transform them to the new coordinate system.
- *	Prints the test input point and output point after is has been transformed.
- *
- */
-void print_test(const Vector3& VRP, const Vector3& VPN, const Vector3& VUP, std::string message,
-                std::vector<Vector3> test_points);
-void print_test_camera_to_light(const Vector3& VRP, const Vector3& VPN, const Vector3& VUP,
-                                const Vector3& LRP, const Vector3& LPN, const Vector3& LUP,
-                                std::string message, std::vector<Vector3> test_points);
+Ray rayConstruction(int i, int j);
+int shading(const Vector3& pos, const Vector3& normal, float kd);
+int rayTracing(const Ray& ray);
+int rayObjectIntersection(const Ray& ray, HitRecord& hit_record);
+
+
+constexpr unsigned ROWS = 512;
+constexpr unsigned COLS = 512;
+constexpr float focal = 50.0f / 1000.f; /* focal length simulating 50 mm lens */
+constexpr float film_size = 35.0f / 1000.f;
+constexpr float aspect_ratio = float(ROWS) / float(COLS);
+
+Vector3 LRP{-10.0, 10.0, 2.0};
+constexpr float Ip = 200.0;
+constexpr float ambient = 20.0f;
+
+TGAImage image(ROWS, COLS, TGAImage::RGB);
+
+Vector3 VRP{1.0, 2.0, 3.5};
+Vector3 VPN{0.0, -1.0, -2.5};
+Vector3 VUP{0.0, 1.0, 0.0};
+Camera camera(VRP, VPN, VUP, focal, film_size, 1.5);
+Mat4 camera_to_world = camera.getViewMatrixInverse();
+
+
+Sphere s({1, 1, 1}, 1.0, 0.75 );
+Polygon poly({{0,0,0},{0,0,2},{2,0,2},{2,0,0}}, {0,1,0}, 0.8);
+HitRecord g_hit_record;
 
 int main()
 {
-	Vector3 VRP(5.f, 5.f, 5.f), VPN(0.f, 0.f, -1.f), VUP(0.f, 1.f, 0.1f);
+	//Height
+	for (int i = 0; i < ROWS; i++)
+	{
+		//Width
+		for (int j = 0; j < COLS; j++)
+		{
+			//Construct th ray starting from center of projection, p0,
+			// and passing through the pixel (x, y);
+			Ray ray = rayConstruction(i, j);
 
-	cout << "---- TEST #1 ----\n";
-	print_test(Vector3(0.f, 0.f, 0.f), Vector3(0.f, 0.f, 1.f), Vector3(0.f, 1.f, 0.f),
-	           "The generated matrix should be an identity matrix",
-	           {});
+			float c;
+			if ((c = rayTracing(ray)) != -1)
+				image.set(j, i, TGAColor((g_hit_record.normal.x+1)*128, (g_hit_record.normal.y+1)*128, (g_hit_record.normal.z+1)*255));
+		}
+	}
 
-	cout << "---- TEST #2 ----\n";
-	print_test(Vector3(0.f, 0.f, 0.f), Vector3(1.f, 0.f, 0.f), Vector3(0.f, 1.f, 0.f),
-	           "The generated matrix should be a rotation matrix around y-axis for -90 degrees.",
-	           {{1.f, 0.5f, 0.f}, {0.f, 1.f, -2.f}, {0.f, .707f, .707f}});
-
-	cout << "---- TEST #3 ----\n";
-	print_test(Vector3(0.f, 0.f, 0.f), Vector3(0.f, 1.f, 1.f), Vector3(0.f, 1.f, 0.f),
-	           "The generated matrix should be a rotation matrix around x-axis for 45 degrees.",
-	           {{0.f, 1.f, 0.f}, {1.f, 0.707f, 0.707f}});
-
-	cout << "---- TEST #4 ----\n";
-	print_test(Vector3(1.f, 1.f, 1.f), Vector3(0.f, 1.f, 1.f), Vector3(0.f, 1.f, 0.f),
-	           "The generated matrix should be a combination of translation of (-1.0, -1.0, -1.0) and rotation matrix around x-axis for 45 degrees.",
-	           {{0.f, 1.f, 0.f}, {1.f, 0.707f, 0.707f}});
-
-	cout << "---- TEST #6 ----\n";
-	print_test_camera_to_light(Vector3(0.f, 2.f, 0.f), Vector3(0.f, 0.f, 1.f), Vector3(0.f, 1.f, 0.f),
-	                           Vector3(0.f, -2.f, 0.f), Vector3(0.f, 0.f, 1.f), Vector3(0.f, 1.f, 0.f),
-	                           "The generated matrix should be a translation of (0.0, -4.0, 0.0)",
-	                           {{0.f, 1.f, 0.f}, {1.f, 2.f, 1.f}});
-
-	cout << "---- TEST #7 ----\n";
-	print_test_camera_to_light(Vector3(0.f, 0.f, 0.f), Vector3(0.f, 1.f, 1.f), Vector3(0.f, 1.f, 0.f),
-	                           Vector3(0.f, 0.f, 0.f), Vector3(1.f, 0.f, 0.f), Vector3(0.f, 1.f, 0.f),
-	                           "The generated matrix should be a rotation around x-axis for 45 degrees and the y-axis for 90 degrees",
-	                           {{0.f, .707107f, .707107f}, {1.f, 0.707107f, 0.707107f}});
+	image.write_tga_file("output.tga");
 }
 
-void print_test(const Vector3& VRP, const Vector3& VPN, const Vector3& VUP, std::string message,
-                std::vector<Vector3> test_points)
+
+int rayTracing(const Ray& ray)
 {
-	cout << message << endl;
-	cout << "VRP = " << VRP << endl;
-	cout << "VPN = " << VPN << endl;
-	cout << "VUP = " << VUP << endl << endl;
+	// If the ray intersects with any object, this function call will
+	// return a true value, and the data of the intersection are return
+	// in P, N, and kd.
+	HitRecord hit_record;
+	int C;
 
-	Vector3 n, u, v;
-	orthoNormalVectors(VPN, VUP, u, v, n);
+	int found = rayObjectIntersection(ray, hit_record);
 
-	// cout << "n_z_forward: " << n << std::endl;
-	// cout << "v_y_up: " << v << std::endl;
-	// cout << "u_x_right: " << u << std::endl;
-	// cout << "n dot v: " << n.dot(v) << std::endl;
+	if (found)
+	{
+			g_hit_record = hit_record;
+		C = shading(hit_record.position, hit_record.normal, hit_record.kd);
+		return (C);
+	}
 
-	Mat4 matrix, inverse_matrix;
-	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, matrix, inverse_matrix);
-
-	cout << "The generated transformation matrix is:\n";
-	cout << matrix << endl;
-
-	cout << "The generated inverse transformation matrix is:\n";
-	cout << inverse_matrix << endl;
-
-	if (test_points.empty()) return;
-
-	cout << "Testing Points:\n";
-	cout << "These points will be transformed using the transformation matrix\n";
-	for (Vector3& point : test_points)
-		cout << point << " -> " << matrix * point << endl;
-
-	cout << endl;
+	return (-1);
 }
 
-void print_test_camera_to_light(const Vector3& VRP, const Vector3& VPN, const Vector3& VUP,
-                                const Vector3& LRP, const Vector3& LPN, const Vector3& LUP,
-                                std::string message, std::vector<Vector3> test_points)
+int rayObjectIntersection(const Ray& ray, HitRecord& hit_record)
 {
-	cout << "Testing camera to world to light transformation\n";
-	cout << message << endl;
+	if (s.hit(ray,hit_record))
+	{
+		return 1;
+	}
+	if( poly.hit(ray,hit_record))
+	{
+		return 1;
+	}
+	return 0;
+}
 
-	cout << "Camera:" << endl;
-	cout << "VRP = " << VRP << endl;
-	cout << "VPN = " << VPN << endl;
-	cout << "VUP = " << VUP << endl << endl;
 
-	cout << "Light:" << endl;
-	cout << "LRP = " << LRP << endl;
-	cout << "LPN = " << LPN << endl;
-	cout << "LUP = " << LUP << endl << endl;
+Ray rayConstruction(int i, int j)
+{
+	// Step 1:
+	// Map (j, i) in the screen coordinates to (xc, yc) in the
+	// camera coordinates.
+	float xmin = film_size / 2 * aspect_ratio;
+	float ymin = film_size / 2;
+	float xmax = -film_size / 2 * aspect_ratio;
+	float ymax = -film_size / 2;
 
-	Vector3 n, u, v;
-	orthoNormalVectors(VPN, VUP, u, v, n);
-	Mat4 camera_to_world, world_to_camera;
-	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, world_to_camera, camera_to_world);
+	float x = (xmax - xmin) * float(j) / float(COLS - 1) + xmin;
+	float y = (ymax - ymin) * float(i) / float(ROWS - 1) + ymin;
 
-	orthoNormalVectors(LPN, LUP, u, v, n);
-	Mat4 light_to_world, world_to_light;
-	coordinateSystemTransformationMatricesFromPositionNormalUp(LRP, LPN, LUP, world_to_light, light_to_world);
+	// Step 2:
+	// Transform the origin (0.0, 0.0, 0.0) of the camera
+	// coordinates to P0 in the world coordinates using the
+	// transformation matrix Mcw. Note that the transformed result
+	// should be VRP.
+	Vector3 VRP = camera_to_world * Vector3(0);
 
-	Mat4 camera_to_light = world_to_light * camera_to_world;
-	Mat4 light_to_camera = world_to_camera * light_to_world;
-	cout << "The generated camera_to_light transformation matrix is:\n";
-	cout << camera_to_light << endl;
+	// Step 3:
+	// Transform the point (xc, yc, f) on the image plane in
+	// the camera coordinates to P1 in the world coordinates using
+	// the transformation matrix Mcw.
+	// V0 = P1 – P0;
+	Vector3 V0 = (camera_to_world * Vector3(x, y, focal)) - VRP;
+	// normalize V0 into unit length;
+	V0.normalize();
 
-	cout << "The generated light_to_camera transformation matrix is:\n";
-	cout << light_to_camera << endl;
+	return Ray(VRP, V0);
+};
 
-	if (test_points.empty()) return;
+int shading(const Vector3& pos, const Vector3& normal, float kd)
+{
+	Vector3 L = LRP - pos;
+	L.normalize();
 
-	cout << "Testing Points:\n";
-	cout << "These points will be transformed using the camera_to_light matrix\n";
-	for (Vector3& point : test_points)
-		cout << point << " -> " << camera_to_light * point << endl;
-
-	cout << endl;
+	int C = Ip * kd * normal.dot(L);
+	if (normal.dot(L) < 0) C = 0;
+	return C;
 }

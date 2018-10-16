@@ -5,7 +5,13 @@
 class Vector3
 {
 public:
-	float x{}, y{}, z{};
+	union
+	{
+		float data[3];
+		struct{	float x, y, z;};
+	};
+
+
 
 	static const Vector3 ZERO;
 
@@ -36,6 +42,7 @@ public:
 	Vector3 getNormalized() const;
 	float distance(const Vector3& v) const;
 	float distanceSquared(const Vector3& v) const;
+	float getLargestComponentIndex()const;
 
 	//Negation
 	Vector3 operator-() const;
@@ -63,6 +70,9 @@ public:
 	Vector3& operator-=(float f);
 	Vector3& operator*=(float f);
 	Vector3& operator/=(float f);
+
+	float operator[](int i) const;
+	float& operator[](int i);
 
 	//Cross Product
 	Vector3 cross(const Vector3& v) const;
