@@ -89,7 +89,7 @@ float Vector3::distanceSquared(const Vector3& v) const
 	return (*this - v).getSquaredLength();
 }
 
-float Vector3::getLargestComponentIndex() const
+int Vector3::getLargestComponentIndex() const
 {
 	float a_x = abs(x);
 	float a_y = abs(y);

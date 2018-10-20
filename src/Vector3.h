@@ -42,7 +42,7 @@ public:
 	Vector3 getNormalized() const;
 	float distance(const Vector3& v) const;
 	float distanceSquared(const Vector3& v) const;
-	float getLargestComponentIndex()const;
+	int getLargestComponentIndex()const;
 
 	//Negation
 	Vector3 operator-() const;

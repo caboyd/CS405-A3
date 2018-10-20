@@ -2,14 +2,14 @@
 #include <iostream>
 #include "Math.h"
 
-# define M_PIl          3.141592653589793238462643383279502884L /* pi */
+constexpr float M_PI = 3.141592653589793238462643383279502884f; /* pi */
 
 //constructor(eye: vec3, target: vec3, up: vec3, vFov: number, aspect: number, aperture: number, focus_dist: number)
 Camera::Camera(const Vector3& pos, const Vector3& normal, const Vector3& up, float vFov, float aspect_ratio)
 {
 	//Convert to radius
-	float theta = (vFov * M_PIl) / 180.0;
-    float half_height = tan(theta / 2) * 0.05;
+	float theta = (vFov * M_PI) / 180.0f;
+    float half_height = tan(theta / 2) * 0.05f;
     float half_width = aspect_ratio * half_height;
 
 	position = pos;

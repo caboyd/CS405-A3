@@ -143,21 +143,19 @@
     <ClCompile Include="src\Mat4.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Math.cpp" />
-    <ClCompile Include="src\tgaimage.cpp" />
     <ClCompile Include="src\Vector3.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Camera.h" />
     <ClInclude Include="src\HitRecord.h" />
     <ClInclude Include="src\Hittable.h" />
-    <ClInclude Include="src\LambertianMaterial.h" />
-    <ClInclude Include="src\Material.h" />
+    <ClInclude Include="src\mymodel.h" />
     <ClInclude Include="src\Polygon.h" />
     <ClInclude Include="src\Ray.h" />
     <ClInclude Include="src\Sphere.h" />
     <ClInclude Include="src\Mat4.h" />
     <ClInclude Include="src\Math.h" />
-    <ClInclude Include="src\tgaimage.h" />
+    <ClInclude Include="src\stb_image_write.h" />
     <ClInclude Include="src\Vector3.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
