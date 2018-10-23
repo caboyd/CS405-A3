@@ -34,7 +34,7 @@ constexpr float xmax = -film_size / 2 * aspect_ratio;
 constexpr float ymax = -film_size / 2;
 
 /* definition of the camera parameters */
-Vector3 VRP{-0.5, 0.8, 4.5f};
+Vector3 VRP{-0.5f, 0.8f, 4.5f};
 Vector3 VPN{1.2f, 0, -2.5f};
 Vector3 VUP{0.0f, 1.0f, 0.0f};
 

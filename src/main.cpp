@@ -1,19 +1,34 @@
-#include <iostream>
+/**
+ *	
+ *	Name: Chris Boyd
+ *	Assignment #2
+ *	October 24,2018
+ *	
+ *	Simple greyscale ray tracer with a sphere and quad in scene
+ *	Outputs a 512x512 BMP file using stb_image_write.h (https://github.com/nothings/stb)
+ *
+ */
 
 #include "mymodel.h"
 #include "Math.h"
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#include <fstream>
+#include <iostream>
 
 Ray rayConstruction(int i, int j);
 int shading(const Vector3& pos, const Vector3& normal, float kd);
 int rayTracing(const Ray& ray);
 int rayObjectIntersection(const Ray& ray, HitRecord& hit_record);
+void write_raw(const char* filename, int bytes, const void* data);
+int clamp(int value, int min, int max);
 
 int main()
 {
 	//Initialization of Camera Matrices
-	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP,VPN,VUP,Mwc,Mcw);
+	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, Mwc, Mcw);
 
 	//Height
 	for (unsigned int i = 0; i < ROWS; i++)
@@ -28,11 +43,15 @@ int main()
 			int c;
 			//Color the image using the shading value generated
 			if ((c = rayTracing(ray)) != -1)
-				img[i][j] = c;
+				img[i][j] = (unsigned char)c;
 		}
 	}
 
-	stbi_write_bmp("output.bmp",ROWS,COLS,1,img);
+	//Output file as bmp picture
+	stbi_write_bmp("output.bmp", COLS, ROWS, 1, img);
+
+	//Output file as raw buffer data
+	write_raw("output.raw", sizeof(img), img);
 }
 
 
@@ -84,7 +103,7 @@ Ray rayConstruction(int i, int j)
 	// the camera coordinates to P1 in the world coordinates using
 	// the transformation matrix Mcw.
 	// V0 = P1 – P0;
-	Vector3 P1 = Mcw * Vector3(x,y,focal);
+	Vector3 P1 = Mcw * Vector3(x, y, focal);
 	Vector3 V0 = P1 - P0;
 	// normalize V0 into unit length;
 	V0.normalize();
@@ -119,7 +138,7 @@ int rayObjectIntersection(const Ray& ray, HitRecord& hit_record)
 
 	//Compute polygon intersection
 	//Will only be true if polygon is hit and is closer than sphere
-	if (polygon_obj.hit(ray,  0.0001f, closest_so_far_t, hit_record))
+	if (polygon_obj.hit(ray, 0.0001f, closest_so_far_t, hit_record))
 	{
 		hit_anything = true;
 	}
@@ -136,11 +155,29 @@ int shading(const Vector3& pos, const Vector3& normal, float kd)
 
 	//Phong lighting model
 	//The amount of light is equal to 
-	//light intenstity * diffuse coefficient * cos angle between normal and light
-	int color = int(Ip * kd * normal.dot(L));
+	//light intensity * diffuse coefficient * cos angle between normal and light
+	const int color = int(Ip * kd * normal.dot(L));
 
 	//Color may be negative if angle between normal and light >90 degrees
-	if (color < 0) 
-		color = 0;
-	return color;
+	//Clamp between 0 and 255
+	return clamp(color, 0, 255);
+}
+
+void write_raw(const char* filename, int bytes, const void* data)
+{
+	//open outfile in out mode, overrite mode, and binary mode
+	std::ofstream os(filename, std::ofstream::out | std::ofstream::trunc | std::ios::binary);
+	if (os.is_open())
+	{
+		for (int i = 0; i < bytes; i++)
+			os << static_cast<const unsigned char*>(data)[i];
+	}
+	os.close();
+}
+
+int clamp(int value, int min, int max)
+{
+	if(value > max) return  max;
+	if(value < min) return  min;
+	return value;
 }
