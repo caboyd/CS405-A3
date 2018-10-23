@@ -5,7 +5,7 @@
 #include "HitRecord.h"
 #include <vector>
 
-bool pointInPolygon(std::vector<Vector3> vertices, Vector3 point, int x, int y);
+
 
 class Polygon : Hittable
 {
@@ -22,6 +22,8 @@ public:
 	}
 
 	bool hit(const Ray& ray, float t_min, float t_max, HitRecord& hit_record) override;
+private:
+	static bool pointInPolygon(std::vector<Vector3> vertices, Vector3 point, int x, int y);
 };
 
 inline bool Polygon::hit(const Ray& ray, float t_min, float t_max, HitRecord& hit_record)
@@ -61,9 +63,10 @@ inline bool Polygon::hit(const Ray& ray, float t_min, float t_max, HitRecord& hi
 }
 
 
-inline bool pointInPolygon(std::vector<Vector3> vertices, Vector3 point, int x, int y)
+//Algorithm from https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html
+inline bool Polygon::pointInPolygon(std::vector<Vector3> vertices, Vector3 point, int x, int y)
 {
-		bool intersections_is_odd = false;
+	bool intersections_is_odd = false;
 	for (size_t i = 0, j = vertices.size() - 1; i < vertices.size(); j = i++)
 	{
 		//One point above point, one point below point
@@ -71,10 +74,11 @@ inline bool pointInPolygon(std::vector<Vector3> vertices, Vector3 point, int x, 
 		if ((vertices[i][y] > point[y]) != (vertices[j][y] > point[y]))
 		{
 			//x_intersection is the x along the line created by the two vertices when y is 0
-			const float x_intersection = (vertices[j][x] - vertices[i][x]) * (point[y] - vertices[i][y]) / (vertices[j][y] - vertices[i][y]) + vertices[i][x];
+			const float x_intersection = (vertices[j][x] - vertices[i][x]) * (point[y] - vertices[i][y]) / (vertices[j][
+				y] - vertices[i][y]) + vertices[i][x];
 
 			//If intersection on x-axis is to the right of the point then we count it as an intersection
-			if (point[x] < x_intersection )
+			if (point[x] < x_intersection)
 			{
 				intersections_is_odd = !intersections_is_odd;
 			}
@@ -82,4 +86,3 @@ inline bool pointInPolygon(std::vector<Vector3> vertices, Vector3 point, int x, 
 	}
 	return intersections_is_odd;
 }
-

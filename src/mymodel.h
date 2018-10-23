@@ -28,6 +28,7 @@ constexpr float focal = 50.0f / 1000.f; /* focal length simulating 50 mm lens */
 constexpr float film_size = 35.f / 1000.f; /* film size simulating 35 mm film */
 constexpr float aspect_ratio = float(ROWS) / float(COLS);
 
+//Coordinates of the screen
 constexpr float xmin = film_size / 2 * aspect_ratio;
 constexpr float ymin = film_size / 2;
 constexpr float xmax = -film_size / 2 * aspect_ratio;
@@ -42,6 +43,7 @@ Vector3 VUP{0.0f, 1.0f, 0.0f};
 Vector3 LRP{-10.0, 10.0, 2.0};	/* light position */
 constexpr float Ip = 200.0;		/* intensity of the point light source */
 
+//Matrices for world to camera and camera to world
 Mat4 Mwc = Mat4::fromIdentity();
 Mat4 Mcw = Mat4::fromIdentity();
 

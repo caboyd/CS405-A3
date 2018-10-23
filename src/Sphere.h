@@ -121,7 +121,7 @@ inline bool Sphere::sphereIntersectionMethod2(const Ray& ray, float t_min, float
 	{
 		//No Roots	
 	}
-	else if (discriminant > 0)
+	else if (discriminant >= 0)
 	{
 		//One or Two Roots
 		float t0 = (-b - sqrt(discriminant)) / 2 * a;
