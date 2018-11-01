@@ -11,6 +11,8 @@
 
 #include "mymodel.h"
 #include "Math.h"
+#include "Ray.h"
+#include "HitRecord.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -19,61 +21,47 @@
 #include <iostream>
 
 Ray rayConstruction(int i, int j);
-int shading(const Vector3& pos, const Vector3& normal, float kd);
-int rayTracing(const Ray& ray);
-int rayObjectIntersection(const Ray& ray, HitRecord& hit_record);
 void write_raw(const char* filename, int bytes, const void* data);
-int clamp(int value, int min, int max);
+inline int clamp(int value, int min, int max);
+
+void readDensityData(const char* filename, int rows, int cols, int layers, void* data);
+void computeShadingVolume();
+int rayBoxIntersection(const Ray& ray, float ts[2]);
+int volumeRayTracing(const Ray& ray, float ts[2]);
+float trilinearInterpolation(unsigned char buffer[DEN_LAYERS][DEN_ROWS][DEN_COLS], const Vector3& p);
+inline float bilinearInterpolation(float v00, float v10, float v01, float v11, float tx, float ty);
+inline float lerp(float v0, float v1, float t);
 
 int main()
 {
 	//Initialization of Camera Matrices
 	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, Mwc, Mcw);
 
+	readDensityData("smallHead.den", DEN_ROWS, DEN_COLS, DEN_LAYERS, density_buffer);
+	computeShadingVolume();
+
 	//Height
-	for (unsigned int i = 0; i < ROWS; i++)
+	for (unsigned int i = 0; i < IMG_ROWS; i++)
 	{
 		//Width
-		for (unsigned int j = 0; j < COLS; j++)
+		for (unsigned int j = 0; j < IMG_COLS; j++)
 		{
 			//Construct th ray starting from center of projection, p0,
 			// and passing through the pixel (x, y);
 			Ray ray = rayConstruction(i, j);
+			float ts[2] = {};
 
-			int c;
-			//Color the image using the shading value generated
-			if ((c = rayTracing(ray)) != -1)
-				img[i][j] = (unsigned char)c;
+			int n = rayBoxIntersection(ray, ts);
+			if (n == 2)
+				img[i][j] = volumeRayTracing(ray, ts);
 		}
 	}
 
 	//Output file as bmp picture
-	stbi_write_bmp("output.bmp", COLS, ROWS, 1, img);
+	stbi_write_bmp("output.bmp", IMG_COLS, IMG_ROWS, 1, img);
 
 	//Output file as raw buffer data
 	write_raw("output.raw", sizeof(img), img);
-}
-
-
-int rayTracing(const Ray& ray)
-{
-	// If the ray intersects with any object, this function call will
-	// return a true value, and the data of the intersection are return
-	// in P, N, and kd.
-
-	//HitRecord is the container for P, N, and kd
-	// P is intersection point
-	// N is normal of object at that point
-	// kd is the diffuse reflection coefficient
-	HitRecord hit_record;
-
-	//If the ray intersects with any objects in the scene
-	//return the color using the shading value generated
-	if (rayObjectIntersection(ray, hit_record))
-		return shading(hit_record.position, hit_record.normal, hit_record.kd);
-
-	//No intersection
-	return -1;
 }
 
 
@@ -88,8 +76,8 @@ Ray rayConstruction(int i, int j)
 	// camera coordinates.
 
 	//(0,0) is upper left corner
-	float x = (xmax - xmin) * float(j) / float(COLS - 1) + xmin;
-	float y = (ymax - ymin) * float(i) / float(ROWS - 1) + ymin;
+	float x = (xmax - xmin) * float(j) / float(IMG_COLS - 1) + xmin;
+	float y = (ymax - ymin) * float(i) / float(IMG_ROWS - 1) + ymin;
 
 	// Step 2:
 	// Transform the origin (0.0, 0.0, 0.0) of the camera
@@ -112,57 +100,6 @@ Ray rayConstruction(int i, int j)
 };
 
 
-// Ray-Object Intersection
-// Input: ray – ray.origin, ray.direction
-// Output: hit_record - the nearest intersection point P[3] if found, 
-// along with N[3], the surface normal at that point, and
-// kd, the diffuse reflection coefficient of the surface.
-// Note: In a general system, the objects should be stored a list
-// structure. A loop will scan through each object in the list. The
-// nearest intersection point is found. In our case, we will have only
-// two hard-coded objects: a sphere and a polygon.
-int rayObjectIntersection(const Ray& ray, HitRecord& hit_record)
-{
-	bool hit_anything = false;
-
-	//The closest intersection point found.
-	//The t value in the equation Point = Ray.origin + t * Ray.direction
-	float closest_so_far_t = FLT_MAX;
-
-	//Compute sphere intersection
-	if (sphere_obj.hit(ray, 0.0001f, closest_so_far_t, hit_record))
-	{
-		hit_anything = true;
-		closest_so_far_t = hit_record.t;
-	}
-
-	//Compute polygon intersection
-	//Will only be true if polygon is hit and is closer than sphere
-	if (polygon_obj.hit(ray, 0.0001f, closest_so_far_t, hit_record))
-	{
-		hit_anything = true;
-	}
-
-	return hit_anything;
-}
-
-
-int shading(const Vector3& pos, const Vector3& normal, float kd)
-{
-	//Normalized light direction vector
-	Vector3 L = LRP - pos;
-	L.normalize();
-
-	//Phong lighting model
-	//The amount of light is equal to 
-	//light intensity * diffuse coefficient * cos angle between normal and light
-	const int color = int(Ip * kd * normal.dot(L));
-
-	//Color may be negative if angle between normal and light >90 degrees
-	//Clamp between 0 and 255
-	return clamp(color, 0, 255);
-}
-
 void write_raw(const char* filename, int bytes, const void* data)
 {
 	//open outfile in out mode, overrite mode, and binary mode
@@ -175,9 +112,193 @@ void write_raw(const char* filename, int bytes, const void* data)
 	os.close();
 }
 
-int clamp(int value, int min, int max)
+inline int clamp(int value, int min, int max)
 {
-	if(value > max) return  max;
-	if(value < min) return  min;
+	if (value > max) return max;
+	if (value < min) return min;
 	return value;
+}
+
+void readDensityData(const char* filename, int rows, int cols, int layers, void* data)
+{
+	char* p = static_cast<char*>(data);
+
+	std::ifstream is(filename, std::ifstream::binary);
+	if (is)
+	{
+		is.seekg(0, is.end);
+		int length = is.tellg();
+		is.seekg(0, is.beg);
+		assert(length == rows*cols*layers);
+		is.read(p, length);
+	}
+}
+
+void computeShadingVolume()
+{
+	Vector3 normal;
+	// boundary layers are skipped.
+	for (unsigned int z = 1; z < (DEN_LAYERS - 1); z++)
+		for (unsigned int y = 1; y < (DEN_ROWS - 1); y++)
+			for (unsigned int x = 1; x < (DEN_COLS - 1); x++)
+			{
+				// compute the partial derivative at [z, y, x]
+
+				float dfdx = ((float)density_buffer[z][y][x + 1] - (float)density_buffer[z][y][x - 1]) / 2.0f;
+				float dfdy = ((float)density_buffer[z][y + 1][x] - (float)density_buffer[z][y + 1][x]) / 2.0f;
+				float dfdz = ((float)density_buffer[z + 1][y][x] - (float)density_buffer[z - 1][y][x]) / 2.0f;
+
+				normal.set(dfdx, dfdy, dfdz);
+
+				// if the magnitude of the gradient is less than a
+				// pre-specified epsilon value, set shading to 0.
+				// otherwise, compute the diffuse shading.
+				// save the result in the shading volume.
+
+				int color = 0;
+				if (normal.getSquaredLength() > EPSILON * EPSILON)
+				{
+					normal.normalize();
+					color = int(Ip * normal.dot(light_dir));
+				}
+
+				color = clamp(color, 0, 255);
+				shading_buffer[z][y][x] = color;
+			}
+}
+
+int rayBoxIntersection(const Ray& ray, float ts[2])
+{
+	int n = 0;
+
+	float TOP = DEN_ROWS-1;
+	float BOTTOM = 0;
+
+	float FRONT = DEN_LAYERS-1;
+	float BACK = 0;
+
+	float LEFT = 0;
+	float RIGHT = DEN_COLS-1;
+
+	Vector3 p = ray.point_at_plane_x(LEFT);
+	if (p.y > BOTTOM && p.y < TOP && p.z > BACK && p.z < FRONT)
+		ts[n] = ray.parameter_at_plane_x(LEFT), n++;
+
+
+	p = ray.point_at_plane_x(RIGHT);
+	if (p.y > BOTTOM && p.y < TOP && p.z > BACK && p.z < FRONT)
+		ts[n] = ray.parameter_at_plane_x(RIGHT), n++;
+	if (n == 2) return n;
+	p = ray.point_at_plane_y(BOTTOM);
+	if (p.x > LEFT && p.x < RIGHT && p.z > BACK && p.z < FRONT)
+		ts[n] = ray.parameter_at_plane_y(BOTTOM), n++;
+	if (n == 2) return n;
+	p = ray.point_at_plane_y(TOP);
+	if (p.x > LEFT && p.x < RIGHT && p.z > BACK && p.z < FRONT)
+		ts[n] = ray.parameter_at_plane_y(TOP), n++;
+	if (n == 2) return n;
+	p = ray.point_at_plane_z(BACK);
+	if (p.x > LEFT && p.x < RIGHT && p.y > BOTTOM && p.y < TOP)
+		ts[n] = ray.parameter_at_plane_z(BACK), n++;
+	if (n == 2) return n;
+	p = ray.point_at_plane_z(FRONT);
+	if (p.x > LEFT && p.x < RIGHT && p.y > BOTTOM && p.y < TOP)
+		ts[n] = ray.parameter_at_plane_z(FRONT), n++;
+
+	return n;
+}
+
+int volumeRayTracing(const Ray& ray, float ts[2])
+{
+	float Dt = 1.0; // the interval for sampling along the ray
+	float C = 0.0; // for accumulating the shading value
+	float T = 1.0; // for accumulating the transparency
+
+	/* Marching through the CT volume from t0 to t1
+ by step size Dt.
+*/
+	float t1 = ts[0];
+	float t2 = ts[1];
+	if (t1 > t2) std::swap(t1, t2);
+
+	for (float t = t1; t <= t2; t += Dt)
+	{
+		// front-to-back order
+		/* Compute the 3D coordinates of the current
+		 sample position in the volume:
+		 x = x(t);
+		 y = y(t);
+		 z = z(t);
+		*/
+		Vector3 point = ray.point_at_parameter(t);
+
+		/* Obtain the shading value C and opacity value A
+	 from the shading volume and CT volume, respectively,
+	 by using tri-linear interpolation. */
+		float color = trilinearInterpolation(shading_buffer, point);
+		float den = trilinearInterpolation(density_buffer, point);
+		float alpha = den / 255.0f;
+
+		/* Accumulate the shading values in the front-to-back order.
+Note: You will accumulate the transparency. This value
+can be used in the for-loop for early termination.
+*/
+		if (den > 25 && den < 65)
+		{
+			C += T * alpha * color;
+			T *= (1.0f - alpha);
+		}
+	}
+
+	int color = clamp((int)C, 0, 255);
+
+	return color;
+}
+
+float trilinearInterpolation(unsigned char buffer[128][128][128], const Vector3& p)
+{
+	//INDICES
+	auto posx = (unsigned char)ceil(p.x);
+	auto negx = (unsigned char)floor(p.x);
+
+	auto posy = (unsigned char)ceil(p.y);
+	auto negy = (unsigned char)floor(p.y);
+
+	auto posz = (unsigned char)ceil(p.z);
+	auto negz = (unsigned char)floor(p.z);
+
+	assert(posx < 128);
+	assert(negx >= 0);
+	assert(posy < 128);
+	assert(negy >= 0);
+	assert(posz < 128);
+	assert(negz >= 0);
+
+	//TOP 4 corners
+	unsigned char posx_posz = buffer[posz][posy][posx];
+	unsigned char negx_posz = buffer[posz][posy][negx];
+	unsigned char posx_negz = buffer[negz][posy][posx];
+	unsigned char negx_negz = buffer[negz][posy][negx];
+
+	float top = bilinearInterpolation(negx_posz, posx_posz, negx_negz, posx_negz, p.x - negx, 1.0f - (p.z - negz));
+
+	posx_posz = buffer[posz][negy][posx];
+	negx_posz = buffer[posz][negy][negx];
+	posx_negz = buffer[negz][negy][posx];
+	negx_negz = buffer[negz][negy][negx];
+
+	float bottom = bilinearInterpolation(negx_posz, posx_posz, negx_negz, posx_negz, p.x - negx, 1.0f - (p.z - negz));
+
+	return lerp(top, bottom, p.y - negy);
+}
+
+inline float bilinearInterpolation(float v00, float v10, float v01, float v11, float tx, float ty)
+{
+	return lerp(lerp(v00, v10, tx), lerp(v01, v11, tx), ty);
+}
+
+
+inline float lerp(float v0, float v1, float t)
+{
+	return (1 - t) * v0 + t * v1;
 }
