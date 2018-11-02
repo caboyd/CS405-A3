@@ -15,7 +15,7 @@ constexpr unsigned DEN_LAYERS = 128;
 unsigned char density_buffer[DEN_LAYERS][DEN_ROWS][DEN_COLS];
 unsigned char shading_buffer[DEN_LAYERS][DEN_ROWS][DEN_COLS];
 
-const float EPSILON = 15.f;
+const float EPSILON = 18.f;
 
 /* definition of window on the image plane in the camera coordinates */
 /* They are used in mapping (j, i) in the screen coordinates into */
@@ -33,12 +33,13 @@ constexpr float xmax = -film_size / 2 * aspect_ratio;
 constexpr float ymax = -film_size / 2;
 
 /* definition of the camera parameters */
-Vector3 VRP{128, -166, 64};
-Vector3 VPN{-0.3, 1, 0};
+Vector3 VRP{286, 64, 64};
+Vector3 VPN{-1, 0, 0};
 Vector3 VUP{0, 0, -1};
 
 /* definition of light source */
-Vector3 light_dir{0.577f, -0.577f, -0.577f};	/* light position */
+Vector3 light_dir{-0.577f, 0.577f, 0.577f};	/* light position */
+
 constexpr float Ip = 255.0;		/* intensity of the point light source */
 
 //Matrices for world to camera and camera to world

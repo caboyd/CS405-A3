@@ -210,7 +210,7 @@ int rayBoxIntersection(const Ray& ray, float ts[2])
 
 int volumeRayTracing(const Ray& ray, float ts[2])
 {
-	float Dt = 1.0; // the interval for sampling along the ray
+	float Dt = 1.f; // the interval for sampling along the ray
 	float C = 0.0; // for accumulating the shading value
 	float T = 1.0; // for accumulating the transparency
 
@@ -243,11 +243,12 @@ int volumeRayTracing(const Ray& ray, float ts[2])
 Note: You will accumulate the transparency. This value
 can be used in the for-loop for early termination.
 */
-		if (den > 25 && den < 65)
+		if (den > 220 && den < 255)
 		{
 			C += T * alpha * color;
 			T *= (1.0f - alpha);
 		}
+		
 	}
 
 	int color = clamp((int)C, 0, 255);
@@ -267,13 +268,6 @@ float trilinearInterpolation(unsigned char buffer[128][128][128], const Vector3&
 	auto posz = (unsigned char)ceil(p.z);
 	auto negz = (unsigned char)floor(p.z);
 
-	assert(posx < 128);
-	assert(negx >= 0);
-	assert(posy < 128);
-	assert(negy >= 0);
-	assert(posz < 128);
-	assert(negz >= 0);
-
 	//TOP 4 corners
 	unsigned char posx_posz = buffer[posz][posy][posx];
 	unsigned char negx_posz = buffer[posz][posy][negx];
@@ -282,6 +276,7 @@ float trilinearInterpolation(unsigned char buffer[128][128][128], const Vector3&
 
 	float top = bilinearInterpolation(negx_posz, posx_posz, negx_negz, posx_negz, p.x - negx, 1.0f - (p.z - negz));
 
+	//BOTTOM 4 corners
 	posx_posz = buffer[posz][negy][posx];
 	negx_posz = buffer[posz][negy][negx];
 	posx_negz = buffer[negz][negy][posx];
@@ -289,7 +284,7 @@ float trilinearInterpolation(unsigned char buffer[128][128][128], const Vector3&
 
 	float bottom = bilinearInterpolation(negx_posz, posx_posz, negx_negz, posx_negz, p.x - negx, 1.0f - (p.z - negz));
 
-	return lerp(top, bottom, p.y - negy);
+	return lerp(bottom, top, p.y - negy);
 }
 
 inline float bilinearInterpolation(float v00, float v10, float v01, float v11, float tx, float ty)
