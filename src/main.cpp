@@ -1,10 +1,11 @@
 /**
  *	
  *	Name: Chris Boyd
- *	Assignment #2
- *	October 24,2018
+ *	Assignment #3
+ *	November 24,20119
  *	
- *	Simple greyscale ray tracer with a sphere and quad in scene
+ *	Simple greyscale volume ray tracer using 128x128x128 8bit density data
+ *	Draws multiple images of a smallHead.den from multiple angles and different densities
  *	Outputs a 512x512 BMP file using stb_image_write.h (https://github.com/nothings/stb)
  *
  */
@@ -12,7 +13,6 @@
 #include "mymodel.h"
 #include "Math.h"
 #include "Ray.h"
-#include "HitRecord.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -20,98 +20,69 @@
 #include <fstream>
 #include <iostream>
 
-Ray rayConstruction(int i, int j);
-void write_raw(const char* filename, int bytes, const void* data);
-inline int clamp(int value, int min, int max);
-
 void readDensityData(const char* filename, int rows, int cols, int layers, void* data);
 void computeShadingVolume();
+void volumeRayTraceSpecificDensities(const char* filename, float min_density, float max_density);
 int rayBoxIntersection(const Ray& ray, float ts[2]);
 int volumeRayTracing(const Ray& ray, float ts[2], float min_density, float max_density);
-void volumeRayTraceSpecificDensities(const char* filename, float min_density, float max_density);
+Ray rayConstruction(int i, int j);
+
+void write_raw(const char* filename, int bytes, const void* data);
 float trilinearInterpolation(unsigned char buffer[DEN_LAYERS][DEN_ROWS][DEN_COLS], const Vector3& p);
 inline float bilinearInterpolation(float v00, float v10, float v01, float v11, float tx, float ty);
 inline float lerp(float v0, float v1, float t);
+inline int clamp(int value, int min, int max);
+inline float clamp(float value, float min, float max);
 
 int main()
 {
-	//Initialization of Camera Matrices
-	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, Mwc, Mcw);
-
+	//Read and compute density data
 	readDensityData("smallHead.den", DEN_ROWS, DEN_COLS, DEN_LAYERS, density_buffer);
 	computeShadingVolume();
+
+	//DRAW MULTIPLE IMAGES FROM MULTIPLE ANGLES
+
+	// //DEFAULT SIDE
+	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, Mwc, Mcw);
+	volumeRayTraceSpecificDensities("bottom_soft_tissue", tissue_min, tissue_max);
+	volumeRayTraceSpecificDensities("bottom_skin", skin_min, skin_max);
+	volumeRayTraceSpecificDensities("bottom_bone", bone_min, bone_max);
 
 	//RIGHT SIDE
 	VRP = {286, 64, 64};
 	VPN = {-1, 0, 0};
 	VUP = {0, 0, -1};
-	volumeRayTraceSpecificDensities("right_soft_tissue", 30.f, 55.f);
-	volumeRayTraceSpecificDensities("right_skin", 55.f, 90.f);
-	volumeRayTraceSpecificDensities("right_bone", 110.f, 255.f);
+	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, Mwc, Mcw);
+	volumeRayTraceSpecificDensities("right_soft_tissue", tissue_min, tissue_max);
+	volumeRayTraceSpecificDensities("right_skin", skin_min, skin_max);
+	volumeRayTraceSpecificDensities("right_bone", bone_min, bone_max);
 
-	VRP = {64, -286, 64};
+	//FRONT
+	VRP = {64, -156, 64};
 	VPN = {0, 1, 0};
-	VUP = {0, 0, 1};
-	volumeRayTraceSpecificDensities("front_soft_tissue", 30.f, 55.f);
-	volumeRayTraceSpecificDensities("front_skin", 55.f, 90.f);
-	volumeRayTraceSpecificDensities("front_bone", 110.f, 255.f);
+	VUP = {0, 0, -1};
+	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, Mwc, Mcw);
+	volumeRayTraceSpecificDensities("front_soft_tissue", tissue_min, tissue_max);
+	volumeRayTraceSpecificDensities("front_skin", skin_min, skin_max);
+	volumeRayTraceSpecificDensities("front_bone", bone_min, bone_max);
 
-}
+	//TOP
+	VRP = {64, 64, -186};
+	VPN = (Vector3(64, 64, 64) - VRP).getNormalized();
+	VUP = {0, 1, 0};
+	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, Mwc, Mcw);
+	volumeRayTraceSpecificDensities("top_soft_tissue", tissue_min, tissue_max);
+	volumeRayTraceSpecificDensities("top_skin", skin_min, skin_max);
+	volumeRayTraceSpecificDensities("top_bone", bone_min, bone_max);
 
-
-// Construction of ray
-// Input: pixel index (i, j) in the screen coordinates
-// Output: P0, V0 (for parametric ray equation P = P0 + V0*t)
-// in the world coordinates.
-Ray rayConstruction(int i, int j)
-{
-	// Step 1:
-	// Map (j, i) in the screen coordinates to (xc, yc) in the
-	// camera coordinates.
-
-	//(0,0) is upper left corner
-	float x = (xmax - xmin) * float(j) / float(IMG_COLS - 1) + xmin;
-	float y = (ymax - ymin) * float(i) / float(IMG_ROWS - 1) + ymin;
-
-	// Step 2:
-	// Transform the origin (0.0, 0.0, 0.0) of the camera
-	// coordinates to P0 in the world coordinates using the
-	// transformation matrix Mcw. Note that the transformed result
-	// should be VRP.
-	Vector3 P0 = Mcw * Vector3(0);
-
-	// Step 3:
-	// Transform the point (xc, yc, f) on the image plane in
-	// the camera coordinates to P1 in the world coordinates using
-	// the transformation matrix Mcw.
-	// V0 = P1 – P0;
-	Vector3 P1 = Mcw * Vector3(x, y, focal);
-	Vector3 V0 = P1 - P0;
-	// normalize V0 into unit length;
-	V0.normalize();
-
-	return Ray(P0, V0);
-};
-
-
-//Writes the raw bytes to a file
-void write_raw(const char* filename, int bytes, const void* data)
-{
-	//open outfile in out mode, overrite mode, and binary mode
-	std::ofstream os(filename, std::ofstream::out | std::ofstream::trunc | std::ios::binary);
-	if (os.is_open())
-	{
-		for (int i = 0; i < bytes; i++)
-			os << static_cast<const unsigned char*>(data)[i];
-	}
-	os.close();
-}
-
-//Clamps a value between min and max
-inline int clamp(int value, int min, int max)
-{
-	const int result = value < min ? min : value;
-	return result > max ? max : result;
+	//TOP LEFT
+	VRP = {-90, -100, -70};
+	VPN = (Vector3(64, 64, 64) - VRP).getNormalized();
+	VUP = {0, 0, -1};
+	coordinateSystemTransformationMatricesFromPositionNormalUp(VRP, VPN, VUP, Mwc, Mcw);
+	volumeRayTraceSpecificDensities("top_left_soft_tissue", tissue_min, tissue_max);
+	volumeRayTraceSpecificDensities("top_left_skin", skin_min, skin_max);
+	volumeRayTraceSpecificDensities("top_left_bone", bone_min, bone_max);
 }
 
 
@@ -174,6 +145,37 @@ void computeShadingVolume()
 			}
 }
 
+
+void volumeRayTraceSpecificDensities(const char* filename, float min_density, float max_density)
+{
+	//Height
+	for (unsigned int i = 0; i < IMG_ROWS; i++)
+	{
+		//Width
+		for (unsigned int j = 0; j < IMG_COLS; j++)
+		{
+			//Construct th ray starting from center of projection, p0,
+			// and passing through the pixel (x, y);
+			Ray ray = rayConstruction(i, j);
+			float ts[2] = {};
+
+			//Number of intersection with box
+			int n = rayBoxIntersection(ray, ts);
+
+			//Two intersections meanss we can do volume ray tracing
+			if (n == 2)
+				img[i][j] = volumeRayTracing(ray, ts, min_density, max_density);
+		}
+	}
+
+	//Output file as png picture
+	char str[80];
+	strcpy_s(str, filename);
+	strcat_s(str, ".png");
+	stbi_write_png(str, IMG_COLS, IMG_ROWS, 1, img, IMG_COLS);
+}
+
+
 /*
  * Returns the t values in P(t) = P0 + t*V of
  * the intersection points of the ray intersecting the box
@@ -184,14 +186,14 @@ int rayBoxIntersection(const Ray& ray, float ts[2])
 	int i = 0;
 
 	//6 Bounding Box sides
-	float TOP = DEN_ROWS-1;
+	float TOP = DEN_ROWS - 1;
 	float BOTTOM = 0;
 
-	float FRONT = DEN_LAYERS-1;
+	float FRONT = DEN_LAYERS - 1;
 	float BACK = 0;
 
 	float LEFT = 0;
-	float RIGHT = DEN_COLS-1;
+	float RIGHT = DEN_COLS - 1;
 
 	//Calculates the position the ray would intersect with each plane
 	//If there is an intersection the t value is stored in ts[];
@@ -238,7 +240,7 @@ int rayBoxIntersection(const Ray& ray, float ts[2])
 
 int volumeRayTracing(const Ray& ray, float ts[2], float min_density, float max_density)
 {
-	float Dt = 1.f; // the interval for sampling along the ray
+	float Dt = 0.2f; // the interval for sampling along the ray
 	float C = 0.0; // for accumulating the shading value
 	float T = 1.0; // for accumulating the transparency
 
@@ -264,6 +266,7 @@ int volumeRayTracing(const Ray& ray, float ts[2], float min_density, float max_d
 		 */
 		Vector3 point = ray.point_at_parameter(t);
 
+
 		/* Obtain the shading value C and opacity value A
 		 * from the shading volume and CT volume, respectively,
 		 * by using tri-linear interpolation. 
@@ -277,17 +280,12 @@ int volumeRayTracing(const Ray& ray, float ts[2], float min_density, float max_d
 		 * value is between these bounds.
 		 * This allows to only view specific densities
 		 * 
-		 * 15 - 60 : Soft tissue
-		 * 60 - 110 : Skin
-		 * 110 - 255 : Bone
-		 * 220 - 255 : Hard Bone (teeth)
 		 */
 		if (den > min_density && den < max_density)
 		{
 			C += T * alpha * color;
 			T *= (1.0f - alpha);
 		}
-		
 	}
 
 	int color = clamp((int)C, 0, 255);
@@ -295,50 +293,71 @@ int volumeRayTracing(const Ray& ray, float ts[2], float min_density, float max_d
 	return color;
 }
 
-void volumeRayTraceSpecificDensities(const char* filename, float min_density, float max_density)
+
+// Construction of ray
+// Input: pixel index (i, j) in the screen coordinates
+// Output: P0, V0 (for parametric ray equation P = P0 + V0*t)
+// in the world coordinates.
+Ray rayConstruction(int i, int j)
 {
-	//Height
-	for (unsigned int i = 0; i < IMG_ROWS; i++)
+	// Step 1:
+	// Map (j, i) in the screen coordinates to (xc, yc) in the
+	// camera coordinates.
+
+	//(0,0) is upper left corner
+	float x = (xmax - xmin) * float(j) / float(IMG_COLS - 1) + xmin;
+	float y = (ymax - ymin) * float(i) / float(IMG_ROWS - 1) + ymin;
+
+	// Step 2:
+	// Transform the origin (0.0, 0.0, 0.0) of the camera
+	// coordinates to P0 in the world coordinates using the
+	// transformation matrix Mcw. Note that the transformed result
+	// should be VRP.
+	Vector3 P0 = Mcw * Vector3(0);
+
+	// Step 3:
+	// Transform the point (xc, yc, f) on the image plane in
+	// the camera coordinates to P1 in the world coordinates using
+	// the transformation matrix Mcw.
+	// V0 = P1 – P0;
+	Vector3 P1 = Mcw * Vector3(x, y, focal);
+	Vector3 V0 = P1 - P0;
+	// normalize V0 into unit length;
+	V0.normalize();
+
+	return Ray(P0, V0);
+};
+
+
+//Writes the raw bytes to a file
+void write_raw(const char* filename, int bytes, const void* data)
+{
+	//open outfile in out mode, overrite mode, and binary mode
+	std::ofstream os(filename, std::ofstream::out | std::ofstream::trunc | std::ios::binary);
+	if (os.is_open())
 	{
-		//Width
-		for (unsigned int j = 0; j < IMG_COLS; j++)
-		{
-			//Construct th ray starting from center of projection, p0,
-			// and passing through the pixel (x, y);
-			Ray ray = rayConstruction(i, j);
-			float ts[2] = {};
-
-			int n = rayBoxIntersection(ray, ts);
-			if (n == 2)
-				img[i][j] = volumeRayTracing(ray, ts, min_density, max_density);
-		}
+		for (int i = 0; i < bytes; i++)
+			os << static_cast<const unsigned char*>(data)[i];
 	}
-
-		//Output file as bmp picture
-	char str[80];
-	strcpy_s(str, filename);
-	strcat_s(str,".bmp");
-
-	stbi_write_bmp(str, IMG_COLS, IMG_ROWS, 1, img);
-
-	strcpy_s(str, filename);
-	strcat_s(str,".raw");
-	//Output file as raw buffer data
-	//write_raw(str, sizeof(img), img);
-
+	os.close();
 }
+
 
 float trilinearInterpolation(unsigned char buffer[128][128][128], const Vector3& p)
 {
-	//INDICES
-	auto posx = (unsigned char)ceil(p.x);
-	auto negx = (unsigned char)floor(p.x);
+	//INDICES for buffer
+	float x = clamp(p.x, 0.01f, 126.99f);
+	auto posx = (unsigned char)ceil(x);
+	auto negx = (unsigned char)floor(x);
 
-	auto posy = (unsigned char)ceil(p.y);
-	auto negy = (unsigned char)floor(p.y);
+	float y = clamp(p.y, 0.01f, 126.99f);
+	auto posy = (unsigned char)ceil(y);
+	auto negy = (unsigned char)floor(y);
 
-	auto posz = (unsigned char)ceil(p.z);
-	auto negz = (unsigned char)floor(p.z);
+	float z = clamp(p.z, 0.01f, 126.99f);
+	auto posz = (unsigned char)ceil(z);
+	auto negz = (unsigned char)floor(z);
+
 
 	//TOP 4 corners
 	unsigned char posx_posz = buffer[posz][posy][posx];
@@ -346,7 +365,8 @@ float trilinearInterpolation(unsigned char buffer[128][128][128], const Vector3&
 	unsigned char posx_negz = buffer[negz][posy][posx];
 	unsigned char negx_negz = buffer[negz][posy][negx];
 
-	float top = bilinearInterpolation(negx_posz, posx_posz, negx_negz, posx_negz, p.x - negx, 1.0f - (p.z - negz));
+	//Interpolate TOP 4 corners
+	float top = bilinearInterpolation(negx_negz, posx_negz, negx_posz, posx_posz, x - negx, z - negz);
 
 	//BOTTOM 4 corners
 	posx_posz = buffer[posz][negy][posx];
@@ -354,10 +374,13 @@ float trilinearInterpolation(unsigned char buffer[128][128][128], const Vector3&
 	posx_negz = buffer[negz][negy][posx];
 	negx_negz = buffer[negz][negy][negx];
 
-	float bottom = bilinearInterpolation(negx_posz, posx_posz, negx_negz, posx_negz, p.x - negx, 1.0f - (p.z - negz));
+	//Interpolate BOTTOM 4 corners
+	float bottom = bilinearInterpolation(negx_negz, posx_negz, negx_posz, posx_posz, x - negx, z - negz);
 
-	return lerp(bottom, top, p.y - negy);
+	//Interpolate bottom and top
+	return lerp(bottom, top, y - negy);
 }
+
 
 inline float bilinearInterpolation(float v00, float v10, float v01, float v11, float tx, float ty)
 {
@@ -368,4 +391,20 @@ inline float bilinearInterpolation(float v00, float v10, float v01, float v11, f
 inline float lerp(float v0, float v1, float t)
 {
 	return (1 - t) * v0 + t * v1;
+}
+
+
+//Clamps a value between min and max
+inline int clamp(int value, int min, int max)
+{
+	const int result = value < min ? min : value;
+	return result > max ? max : result;
+}
+
+
+//Clamps a value between min and max
+inline float clamp(float value, float min, float max)
+{
+	const float result = value < min ? min : value;
+	return result > max ? max : result;
 }
