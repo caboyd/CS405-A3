@@ -27,7 +27,8 @@ inline int clamp(int value, int min, int max);
 void readDensityData(const char* filename, int rows, int cols, int layers, void* data);
 void computeShadingVolume();
 int rayBoxIntersection(const Ray& ray, float ts[2]);
-int volumeRayTracing(const Ray& ray, float ts[2]);
+int volumeRayTracing(const Ray& ray, float ts[2], float min_density, float max_density);
+void volumeRayTraceSpecificDensities(const char* filename, float min_density, float max_density);
 float trilinearInterpolation(unsigned char buffer[DEN_LAYERS][DEN_ROWS][DEN_COLS], const Vector3& p);
 inline float bilinearInterpolation(float v00, float v10, float v01, float v11, float tx, float ty);
 inline float lerp(float v0, float v1, float t);
@@ -40,28 +41,21 @@ int main()
 	readDensityData("smallHead.den", DEN_ROWS, DEN_COLS, DEN_LAYERS, density_buffer);
 	computeShadingVolume();
 
-	//Height
-	for (unsigned int i = 0; i < IMG_ROWS; i++)
-	{
-		//Width
-		for (unsigned int j = 0; j < IMG_COLS; j++)
-		{
-			//Construct th ray starting from center of projection, p0,
-			// and passing through the pixel (x, y);
-			Ray ray = rayConstruction(i, j);
-			float ts[2] = {};
+	//RIGHT SIDE
+	VRP = {286, 64, 64};
+	VPN = {-1, 0, 0};
+	VUP = {0, 0, -1};
+	volumeRayTraceSpecificDensities("right_soft_tissue", 30.f, 55.f);
+	volumeRayTraceSpecificDensities("right_skin", 55.f, 90.f);
+	volumeRayTraceSpecificDensities("right_bone", 110.f, 255.f);
 
-			int n = rayBoxIntersection(ray, ts);
-			if (n == 2)
-				img[i][j] = volumeRayTracing(ray, ts);
-		}
-	}
+	VRP = {64, -286, 64};
+	VPN = {0, 1, 0};
+	VUP = {0, 0, 1};
+	volumeRayTraceSpecificDensities("front_soft_tissue", 30.f, 55.f);
+	volumeRayTraceSpecificDensities("front_skin", 55.f, 90.f);
+	volumeRayTraceSpecificDensities("front_bone", 110.f, 255.f);
 
-	//Output file as bmp picture
-	stbi_write_bmp("output.bmp", IMG_COLS, IMG_ROWS, 1, img);
-
-	//Output file as raw buffer data
-	write_raw("output.raw", sizeof(img), img);
 }
 
 
@@ -100,6 +94,7 @@ Ray rayConstruction(int i, int j)
 };
 
 
+//Writes the raw bytes to a file
 void write_raw(const char* filename, int bytes, const void* data)
 {
 	//open outfile in out mode, overrite mode, and binary mode
@@ -112,65 +107,83 @@ void write_raw(const char* filename, int bytes, const void* data)
 	os.close();
 }
 
+//Clamps a value between min and max
 inline int clamp(int value, int min, int max)
 {
-	if (value > max) return max;
-	if (value < min) return min;
-	return value;
+	const int result = value < min ? min : value;
+	return result > max ? max : result;
 }
 
+
+//Copies the density data as a char array into the data blob
 void readDensityData(const char* filename, int rows, int cols, int layers, void* data)
 {
-	char* p = static_cast<char*>(data);
+	//char pointer to data
+	char* buffer = static_cast<char*>(data);
 
 	std::ifstream is(filename, std::ifstream::binary);
 	if (is)
 	{
+		//Assert length of file is same as expected length of file
 		is.seekg(0, is.end);
 		int length = is.tellg();
 		is.seekg(0, is.beg);
 		assert(length == rows*cols*layers);
-		is.read(p, length);
+
+		//Copy the file into the buffer as char array
+		is.read(buffer, length);
 	}
 }
 
+/*
+ * Computes the shading buffer using partial derivatives generated fron density data
+ */
 void computeShadingVolume()
 {
 	Vector3 normal;
+	int color = 0;
 	// boundary layers are skipped.
 	for (unsigned int z = 1; z < (DEN_LAYERS - 1); z++)
 		for (unsigned int y = 1; y < (DEN_ROWS - 1); y++)
 			for (unsigned int x = 1; x < (DEN_COLS - 1); x++)
 			{
 				// compute the partial derivative at [z, y, x]
+				float dfdx = (float(density_buffer[z][y][x + 1]) - float(density_buffer[z][y][x - 1])) / 2.0f;
+				float dfdy = (float(density_buffer[z][y + 1][x]) - float(density_buffer[z][y - 1][x])) / 2.0f;
+				float dfdz = (float(density_buffer[z + 1][y][x]) - float(density_buffer[z - 1][y][x])) / 2.0f;
 
-				float dfdx = ((float)density_buffer[z][y][x + 1] - (float)density_buffer[z][y][x - 1]) / 2.0f;
-				float dfdy = ((float)density_buffer[z][y + 1][x] - (float)density_buffer[z][y + 1][x]) / 2.0f;
-				float dfdz = ((float)density_buffer[z + 1][y][x] - (float)density_buffer[z - 1][y][x]) / 2.0f;
-
+				//move values into Vector
+				//The partial derivative is the normal at that point
 				normal.set(dfdx, dfdy, dfdz);
 
 				// if the magnitude of the gradient is less than a
 				// pre-specified epsilon value, set shading to 0.
 				// otherwise, compute the diffuse shading.
 				// save the result in the shading volume.
-
-				int color = 0;
 				if (normal.getSquaredLength() > EPSILON * EPSILON)
 				{
 					normal.normalize();
+					//color = Light intensity * NdotL
 					color = int(Ip * normal.dot(light_dir));
 				}
 
+				//colors must be clamped from 0 to 255
 				color = clamp(color, 0, 255);
+
 				shading_buffer[z][y][x] = color;
 			}
 }
 
+/*
+ * Returns the t values in P(t) = P0 + t*V of
+ * the intersection points of the ray intersecting the box
+ */
 int rayBoxIntersection(const Ray& ray, float ts[2])
 {
-	int n = 0;
+	//index for ts
+	int i = 0;
 
+	//6 Bounding Box sides
 	float TOP = DEN_ROWS-1;
 	float BOTTOM = 0;
 
@@ -180,70 +193,96 @@ int rayBoxIntersection(const Ray& ray, float ts[2])
 	float LEFT = 0;
 	float RIGHT = DEN_COLS-1;
 
-	Vector3 p = ray.point_at_plane_x(LEFT);
+	//Calculates the position the ray would intersect with each plane
+	//If there is an intersection the t value is stored in ts[];
+	//When there are two intersection we can early return
+
+
+	//LEFT SIDE
+	Vector3 p = ray.point_at_plane_x(LEFT); //Point of intersection
+	//If intersection is within the quad save t
 	if (p.y > BOTTOM && p.y < TOP && p.z > BACK && p.z < FRONT)
-		ts[n] = ray.parameter_at_plane_x(LEFT), n++;
+		ts[i] = ray.parameter_at_plane_x(LEFT), i++;
 
-
+	//RIGHT SIDE
 	p = ray.point_at_plane_x(RIGHT);
 	if (p.y > BOTTOM && p.y < TOP && p.z > BACK && p.z < FRONT)
-		ts[n] = ray.parameter_at_plane_x(RIGHT), n++;
-	if (n == 2) return n;
+		ts[i] = ray.parameter_at_plane_x(RIGHT), i++;
+	if (i == 2) return i;
+
+	//BOTTOM SIDE
 	p = ray.point_at_plane_y(BOTTOM);
 	if (p.x > LEFT && p.x < RIGHT && p.z > BACK && p.z < FRONT)
-		ts[n] = ray.parameter_at_plane_y(BOTTOM), n++;
-	if (n == 2) return n;
+		ts[i] = ray.parameter_at_plane_y(BOTTOM), i++;
+	if (i == 2) return i;
+
+	//TOP SIDE
 	p = ray.point_at_plane_y(TOP);
 	if (p.x > LEFT && p.x < RIGHT && p.z > BACK && p.z < FRONT)
-		ts[n] = ray.parameter_at_plane_y(TOP), n++;
-	if (n == 2) return n;
+		ts[i] = ray.parameter_at_plane_y(TOP), i++;
+	if (i == 2) return i;
+
+	//BACK SIDE
 	p = ray.point_at_plane_z(BACK);
 	if (p.x > LEFT && p.x < RIGHT && p.y > BOTTOM && p.y < TOP)
-		ts[n] = ray.parameter_at_plane_z(BACK), n++;
-	if (n == 2) return n;
+		ts[i] = ray.parameter_at_plane_z(BACK), i++;
+	if (i == 2) return i;
+
+	//FRONT SIDE
 	p = ray.point_at_plane_z(FRONT);
 	if (p.x > LEFT && p.x < RIGHT && p.y > BOTTOM && p.y < TOP)
-		ts[n] = ray.parameter_at_plane_z(FRONT), n++;
+		ts[i] = ray.parameter_at_plane_z(FRONT), i++;
 
-	return n;
+	return i;
 }
 
-int volumeRayTracing(const Ray& ray, float ts[2])
+int volumeRayTracing(const Ray& ray, float ts[2], float min_density, float max_density)
 {
 	float Dt = 1.f; // the interval for sampling along the ray
 	float C = 0.0; // for accumulating the shading value
 	float T = 1.0; // for accumulating the transparency
 
-	/* Marching through the CT volume from t0 to t1
- by step size Dt.
-*/
+	/* Marching through the CT volume from t1 to t2
+	*  by step size Dt.
+	*/
 	float t1 = ts[0];
 	float t2 = ts[1];
+
+	//We want to march in front-to-back order
+	//so swap if t1 is larger
 	if (t1 > t2) std::swap(t1, t2);
 
+
+	//March front-to-back
 	for (float t = t1; t <= t2; t += Dt)
 	{
-		// front-to-back order
 		/* Compute the 3D coordinates of the current
-		 sample position in the volume:
-		 x = x(t);
-		 y = y(t);
-		 z = z(t);
-		*/
+		 * sample position in the volume:
+		 * x = x(t);
+		 * y = y(t);
+		 * z = z(t);
+		 */
 		Vector3 point = ray.point_at_parameter(t);
 
 		/* Obtain the shading value C and opacity value A
-	 from the shading volume and CT volume, respectively,
-	 by using tri-linear interpolation. */
+		 * from the shading volume and CT volume, respectively,
+		 * by using tri-linear interpolation. 
+		 */
 		float color = trilinearInterpolation(shading_buffer, point);
 		float den = trilinearInterpolation(density_buffer, point);
 		float alpha = den / 255.0f;
 
-		/* Accumulate the shading values in the front-to-back order.
-Note: You will accumulate the transparency. This value
-can be used in the for-loop for early termination.
-*/
-		if (den > 220 && den < 255)
+		/*
+		 * Accumulate Color and Transparency onl when density
+		 * value is between these bounds.
+		 * This allows to only view specific densities
+		 * 
+		 * 15 - 60 : Soft tissue
+		 * 60 - 110 : Skin
+		 * 110 - 255 : Bone
+		 * 220 - 255 : Hard Bone (teeth)
+		 */
+		if (den > min_density && den < max_density)
 		{
 			C += T * alpha * color;
 			T *= (1.0f - alpha);
@@ -254,6 +293,39 @@ can be used in the for-loop for early termination.
 	int color = clamp((int)C, 0, 255);
 
 	return color;
+}
+
+void volumeRayTraceSpecificDensities(const char* filename, float min_density, float max_density)
+{
+	//Height
+	for (unsigned int i = 0; i < IMG_ROWS; i++)
+	{
+		//Width
+		for (unsigned int j = 0; j < IMG_COLS; j++)
+		{
+			//Construct th ray starting from center of projection, p0,
+			// and passing through the pixel (x, y);
+			Ray ray = rayConstruction(i, j);
+			float ts[2] = {};
+
+			int n = rayBoxIntersection(ray, ts);
+			if (n == 2)
+				img[i][j] = volumeRayTracing(ray, ts, min_density, max_density);
+		}
+	}
+
+		//Output file as bmp picture
+	char str[80];
+	strcpy_s(str, filename);
+	strcat_s(str,".bmp");
+
+	stbi_write_bmp(str, IMG_COLS, IMG_ROWS, 1, img);
+
+	strcpy_s(str, filename);
+	strcat_s(str,".raw");
+	//Output file as raw buffer data
+	//write_raw(str, sizeof(img), img);
+
 }
 
 float trilinearInterpolation(unsigned char buffer[128][128][128], const Vector3& p)

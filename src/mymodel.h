@@ -15,7 +15,7 @@ constexpr unsigned DEN_LAYERS = 128;
 unsigned char density_buffer[DEN_LAYERS][DEN_ROWS][DEN_COLS];
 unsigned char shading_buffer[DEN_LAYERS][DEN_ROWS][DEN_COLS];
 
-const float EPSILON = 18.f;
+const float EPSILON = 25.f;
 
 /* definition of window on the image plane in the camera coordinates */
 /* They are used in mapping (j, i) in the screen coordinates into */
