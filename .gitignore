@@ -259,9 +259,6 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
-/src/LambertianMaterial.h
-/output.bmp
-/CS405-A2.zip
-/boyd111c-CS405-A2.zip
-/output2.bmp
-/output.raw
+*.zip
+*.bmp
+*.raw
